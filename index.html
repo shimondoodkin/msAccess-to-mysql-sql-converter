@@ -1,0 +1,102 @@
+<!DOCTYPE HTML>
+<html>
+<head>
+    <meta http-equiv="content-type" content="text/html; charset=utf-8" />
+    <title>convert sql msaccess to mysql</title>
+</head>
+
+
+<body  onload="convert()">
+  <script type='text/javascript'>
+
+//s="s( s(gdfgs)fasd)"
+//prefix=/s\(/
+//replace_tokenizer_paranthesis(s,prefix,(a,b,c)=>{ return ["CONVERT(",b+",DATE)"] }) // return [ newprefix , all rest ]
+
+function replace_tokenizer_paranthesis(s,prefix,onmatch)
+{
+ var m,start=0;
+ var input;
+ while(m=(input=s.substr(start)).match(prefix))
+ {
+    var offset_at_end=m.index+m[0].length;
+    
+    
+    var counter = 1;
+	
+	var skip_until="";
+	var i = offset_at_end;
+    for(; i < input.length; i++)
+    {
+        //var pc = i-1>=0?input[i-1]:"";
+        var c = input[i];
+        if( counter==0 )
+        {
+            break;
+        }
+		
+        //else if(c==skip_until&& pc!='\\') //maybe backslash queoted
+        else if(c==skip_until)
+        {
+            skip_until='';
+        }
+        else if(c=='"')
+        {
+            skip_until='"';
+        }
+        else if(c=="'")
+        {
+            skip_until="'";
+        }
+		
+        else if(c=='(')
+        {
+            counter++;
+        }
+        else if(c==')')
+        {
+            counter--;
+        }
+    }
+    if( counter==0 )
+    {
+		    var result=onmatch(m[0], input.substring(offset_at_end,i-1),")")
+		    s=s.substring(0,start+m.index)+result[0]+result[1]+s.substr(start+i);
+            start+=result[0].length;
+    }
+	else
+      start+=offset_at_end;
+ }
+ return s
+}
+
+function convert()
+{
+ o=document.getElementById('from').value;
+ o=o.replace(/\]!\[/g,"].[")
+ o=o.replace(/[\[\]]/g,"`")
+ o=replace_tokenizer_paranthesis(o,/CLng\(/i,(a,b,c)=>{ return [ "CONVERT(", b+", DOUBLE)" ] })
+ o=replace_tokenizer_paranthesis(o,/CDbl\(/i,(a,b,c)=>{ return [ "CONVERT(", b+", DOUBLE)" ] })
+ o=replace_tokenizer_paranthesis(o,/CDate\(/i,(a,b,c)=>{ return [ "CONVERT(", b+", DATE)" ] })
+ o=replace_tokenizer_paranthesis(o,/IsNumeric\(/i,(a,b,c)=>{ return [ "(", b+" REGEXP '^[[:digit:]]+$')" ] })
+ o=replace_tokenizer_paranthesis(o,/First\(/i,(a,b,c)=>{ return [ "convert(FIRST_VALUE(", b+") OVER ( PARTITION BY group_by_cols ORDER BY id asc ),char) " ] })
+ o=replace_tokenizer_paranthesis(o,/Last\(/i,(a,b,c)=>{ return [ "LAST_VALUE(", b+c ] })
+ o=o.replace(/IIf\(/g,"IF(")
+ document.getElementById('to').value=o
+}
+</script>
+
+<textarea id="from" cols="80" rows="16" style="width:100%" onchange="convert()">
+example:
+
+SELECT consumption_import.accountName, CLng([consumption_import].[mainAccountID]) AS mainAccountID,
+ consumption_import.mainAccountName, CDate(Mid(Replace([consumption_import].[accountDate],"T"," "),1,19)) AS accountDate,
+ IIf([accountShareCrm] Is Null Or [accountShareCrm]=0 Or Not IsNumeric([accountShareCrm]),IIf([mainAccountShareCrm] Is Null Or [mainAccountShareCrm]=0 Or Not IsNumeric([mainAccountShareCrm]),Null,CDbl([mainAccountShareCrm])), CDbl([accountShareCrm])) AS combinedShareCrm
+FROM consumption_import;
+
+</textarea><br>
+<textarea id="to" cols="80" rows="16" style="width:100%"></textarea><br>
+
+<button onclick="convert()">convert</button>
+</body>
+</html>
